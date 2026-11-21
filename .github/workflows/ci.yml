@@ -1,0 +1,32 @@
+name: Go checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.sum
+      - name: Check formatting
+        shell: bash
+        run: |
+          unformatted="$(find . -name '*.go' -not -path './vendor/*' -print0 | xargs -0 gofmt -l)"
+          test -z "$unformatted" || { printf '%s\n' "$unformatted"; exit 1; }
+      - name: Check code
+        run: go vet ./...
+      - name: Test with race detector
+        run: go test -race -count=1 -v ./...
+      - name: Build all packages
+        run: go build ./...
+

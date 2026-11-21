@@ -1,0 +1,53 @@
+name: go-resumable-upload
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: upload
+      POSTGRES_PASSWORD: upload
+      POSTGRES_DB: upload
+    volumes:
+      - upload_metadata:/var/lib/postgresql/data
+      - ./migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U upload -d upload"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: "no"
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:8092:8092"
+    environment:
+      DATABASE_URL: postgres://upload:upload@postgres:5432/upload?sslmode=disable
+      API_KEY: ${API_KEY:-local-upload-key}
+      TENANT_ID: ${TENANT_ID:-demo-tenant}
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-4294967296}
+      REQUEST_TIMEOUT: ${REQUEST_TIMEOUT:-20m}
+      UPLOAD_TIMEOUT: ${UPLOAD_TIMEOUT:-2m}
+      MAX_CONCURRENT_UPLOADS: ${MAX_CONCURRENT_UPLOADS:-4}
+      MAX_CONCURRENT_MERGES: ${MAX_CONCURRENT_MERGES:-1}
+      DATA_DIR: /data
+    volumes:
+      - upload_bytes:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8092/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    stop_grace_period: 25s
+    restart: "no"
+volumes:
+  upload_metadata:
+  upload_bytes:
